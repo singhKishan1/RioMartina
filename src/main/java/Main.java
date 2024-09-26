@@ -1,9 +1,7 @@
 import java.io.BufferedReader;
-import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
-import java.io.OutputStreamWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.concurrent.ExecutorService;
@@ -21,23 +19,59 @@ public class Main {
     @Override
     public void run() {
       try {
-        BufferedReader in = new BufferedReader(
-            new InputStreamReader(clientSocket.getInputStream()));
-        BufferedWriter out = new BufferedWriter(
-            new OutputStreamWriter(clientSocket.getOutputStream()));
-        String content;
-        while ((content = in.readLine()) != null) {
-          System.out.println("Req: " + content);
-          if ("PING".equals(content)) {
-            out.write("+PONG\r\n");
-            out.flush();
-          } else {
-            System.out.println("Not ping: " + content);
+        OutputStream outputStream = clientSocket.getOutputStream();
+        BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
+        String line;
+
+        while ((line = bufferedReader.readLine()) != null) {
+          if (line.startsWith("$")) {
+            line = bufferedReader.readLine();
+            if (line.startsWith("ECHO")) {
+              String echoMsg = bufferedReader.readLine();
+              System.out.println("----> " + echoMsg);
+              echoMsg = bufferedReader.readLine();
+              System.out.println("----> " + echoMsg);
+              outputStream.write(("+" + echoMsg + "\r\n").getBytes());
+              outputStream.flush();
+            } else if (line.startsWith("PING")) {
+              outputStream.write(("+PONG\r\n").getBytes());
+              outputStream.flush();
+            }
           }
         }
       } catch (IOException e) {
         e.printStackTrace();
       }
+    }
+  }
+
+  public static void performEchoOperation(Socket cliSocket) {
+    BufferedReader bufferedReader = null;
+    OutputStream outputStream = null;
+
+    try {
+      outputStream = cliSocket.getOutputStream();
+      bufferedReader = new BufferedReader(new InputStreamReader(cliSocket.getInputStream()));
+      String line;
+
+      while ((line = bufferedReader.readLine()) != null) {
+        if (line.startsWith("$")) {
+          line = bufferedReader.readLine();
+          if (line.startsWith("ECHO")) {
+            String echoMsg = bufferedReader.readLine();
+            System.out.println("----> " + echoMsg);
+            echoMsg = bufferedReader.readLine();
+            System.out.println("----> " + echoMsg);
+            outputStream.write(("+" + echoMsg + "\r\n").getBytes());
+            outputStream.flush();
+          } else if (line.startsWith("PING")) {
+            outputStream.write(("+PONG\r\n").getBytes());
+            outputStream.flush();
+          }
+        }
+      }
+    } catch (IOException e) {
+      System.out.println("Exceptoin ouccur --> " + e.getMessage());
     }
   }
 
@@ -56,6 +90,9 @@ public class Main {
       // ensures that we don't run into 'Address already in use' errors
       serverSocket.setReuseAddress(true);
       // Wait for connection from client.
+
+      // Socket clientSocket = serverSocket.accept();
+      // performEchoOperation(clientSocket);
 
       ExecutorService es = Executors.newFixedThreadPool(10);
       while (true) {
