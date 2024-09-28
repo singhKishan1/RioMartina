@@ -4,10 +4,14 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class Main {
+
+  private static Map<String, String> mp = new HashMap<>();
 
   private static class Worker implements Runnable {
     private Socket clientSocket;
@@ -27,15 +31,39 @@ public class Main {
           if (line.startsWith("$")) {
             line = bufferedReader.readLine();
             if (line.startsWith("ECHO")) {
+
               String echoMsg = bufferedReader.readLine();
               System.out.println("----> " + echoMsg);
               echoMsg = bufferedReader.readLine();
               System.out.println("----> " + echoMsg);
               outputStream.write(("+" + echoMsg + "\r\n").getBytes());
               outputStream.flush();
+
             } else if (line.startsWith("PING")) {
+
               outputStream.write(("+PONG\r\n").getBytes());
               outputStream.flush();
+
+            } else if (line.startsWith("SET")) {
+
+              String key = bufferedReader.readLine();
+              key = bufferedReader.readLine();
+
+              String val = bufferedReader.readLine();
+              val = bufferedReader.readLine();
+              System.out.println("key ---> " + key + ",   " + val + ".");
+              mp.put(key, val);
+              outputStream.write("+OK\r\n".getBytes());
+              outputStream.flush();
+
+            } else if (line.startsWith("GET")) {
+
+              String key = bufferedReader.readLine();
+              key = bufferedReader.readLine();
+              System.out.println("for get key --->" + key);
+              outputStream.write(("+" + mp.get(key) + "\r\n").getBytes());
+              outputStream.flush();
+
             }
           }
         }
