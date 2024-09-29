@@ -1,4 +1,5 @@
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
@@ -6,6 +7,7 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.StringTokenizer;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -13,6 +15,8 @@ public class Main {
 
   private static Map<String, String> mp = new HashMap<>();
   private static Map<String, Long> expireTime = new HashMap<>();
+
+  private static Map<String, String> config = new HashMap<>();
 
   private static class Worker implements Runnable {
     private Socket clientSocket;
@@ -66,6 +70,8 @@ public class Main {
               handleGet(bufferedReader, outputStream);
             } else if ("ECHO".equalsIgnoreCase(command)) {
               handleEcho(bufferedReader, outputStream);
+            } else if ("CONFIG".equalsIgnoreCase(command)) {
+              rdbFileConfig(bufferedReader, outputStream);
             } else {
               outputStream.write("-ERR Unknown Command\r\n".getBytes());
               outputStream.flush();
@@ -152,9 +158,40 @@ public class Main {
       outputStream.write("+PONG\r\n".getBytes());
       outputStream.flush();
     }
+
+    public void rdbFileConfig(BufferedReader bufferedReader, OutputStream outputStream) throws IOException {
+      String getCmd = readBulkString(bufferedReader);
+      if ("GET".equalsIgnoreCase(getCmd)) {
+        String key = readBulkString(bufferedReader);
+        String value = config.get(key);
+
+        if (value == null) {
+          outputStream.write("$-1\r\n".getBytes());
+        } else {
+          outputStream.write(("*2\r\n$3\r\ndir\r\n$" + value.length() + "\r\n" + value + "\r\n").getBytes());
+        }
+      } else {
+        outputStream.write("-1ERR not getcmd\r\n".getBytes());
+      }
+
+      outputStream.flush();
+    }
+
   }
 
   public static void main(String[] args) throws IOException {
+
+    for (int i = 0; i < args.length; ++i) {
+      String arg = args[i];
+      if (arg.equals("--dir")) {
+        config.put("dir", args[++i]);
+      }
+
+      if (arg.equals("--dbfilename")) {
+        config.put("dbfilename", args[++i]);
+      }
+
+    }
     System.out.println("Server started on port 6379");
 
     int port = 6379;
@@ -174,4 +211,3 @@ public class Main {
     }
   }
 }
-
