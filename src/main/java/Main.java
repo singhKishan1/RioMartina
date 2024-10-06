@@ -1,13 +1,17 @@
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.ObjectInputStream;
 import java.io.OutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.StringTokenizer;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -72,6 +76,8 @@ public class Main {
               handleEcho(bufferedReader, outputStream);
             } else if ("CONFIG".equalsIgnoreCase(command)) {
               rdbFileConfig(bufferedReader, outputStream);
+            } else if ("KEYS".equalsIgnoreCase(command)) {
+              readKeysFromRDBFileConfig(bufferedReader, outputStream);
             } else {
               outputStream.write("-ERR Unknown Command\r\n".getBytes());
               outputStream.flush();
@@ -175,6 +181,94 @@ public class Main {
       }
 
       outputStream.flush();
+    }
+
+    public void readKeysFromRDBFileConfig(BufferedReader bufferedReader, OutputStream outputStream) throws IOException {
+      String dir = Main.config.get("dir");
+      String dbfilename = Main.config.get("dbfilename");
+      String key = "foo";
+      try (InputStream fis = new FileInputStream(new File(dir, dbfilename))) {
+        byte[] redis = new byte[5];
+        byte[] version = new byte[4];
+        fis.read(redis);
+        fis.read(version);
+        System.out.println("Magic String = " +
+            new String(redis, StandardCharsets.UTF_8));
+        System.out.println("Version = " +
+            new String(version, StandardCharsets.UTF_8));
+        int b;
+        header: while ((b = fis.read()) != -1) {
+          switch (b) {
+            case 0xFF:
+              System.out.println("EOF");
+              break;
+            case 0xFE:
+              System.out.println("SELECTDB");
+              break;
+            case 0xFD:
+              System.out.println("EXPIRETIME");
+              break;
+            case 0xFC:
+              System.out.println("EXPIRETIMEMS");
+              break;
+            case 0xFB:
+              System.out.println("RESIZEDB");
+              b = fis.read();
+              fis.readNBytes(lengthEncoding(fis, b));
+              fis.readNBytes(lengthEncoding(fis, b));
+              break header;
+            case 0xFA:
+              System.out.println("AUX");
+              break;
+          }
+        }
+        System.out.println("header done");
+        // now key value pairs
+        while ((b = fis.read()) != -1) { // value type
+          System.out.println("value-type = " + b);
+          b = fis.read();
+          System.out.println("value-type = " + b);
+          // b = fis.read();
+          // System.out.println("value-type
+          // = " + b);
+          System.out.println(" b = " + Integer.toBinaryString(b));
+          System.out.println("reading keys");
+          int strLength = lengthEncoding(fis, b);
+          b = fis.read();
+          System.out.println("strLength == " + strLength);
+          if (strLength == 0) {
+            strLength = b;
+          }
+          System.out.println("strLength == " + strLength);
+          byte[] bytes = fis.readNBytes(strLength);
+          key = new String(bytes);
+          break;
+        }
+      }
+      outputStream.write(("*1\r\n$" + key.length() + "\r\n" + key + "\r\n").getBytes());
+      outputStream.flush();
+    }
+
+    private static int lengthEncoding(InputStream is, int b) throws IOException {
+      int length = 100;
+      int first2bits = b & 11000000;
+      if (first2bits == 0) {
+        System.out.println("00");
+        length = 0;
+      } else if (first2bits == 128) {
+        System.out.println("01");
+        length = 2;
+      } else if (first2bits == 256) {
+        System.out.println("10");
+        ByteBuffer buffer = ByteBuffer.allocate(Integer.BYTES);
+        buffer.put(is.readNBytes(4));
+        buffer.rewind();
+        length = 1 + buffer.getInt();
+      } else if (first2bits == 256 + 128) {
+        System.out.println("11");
+        length = 1; // special format
+      }
+      return length;
     }
 
   }
